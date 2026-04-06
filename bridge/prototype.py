@@ -194,6 +194,39 @@ def show_sentiment_changes(changes: dict):
 
 # ─── Main Game Loop ──────────────────────────────────────────────────────────
 
+def show_spacetime_leaderboard():
+    """Display SpacetimeDB real-time leaderboard if available."""
+    try:
+        from bridge.spacetime_client import get_leaderboard, is_spacetimedb_running
+        if not is_spacetimedb_running():
+            console.print("[dim]  ⚡ SpacetimeDB: offline[/dim]")
+            return
+
+        lb = get_leaderboard()
+        table = Table(title="⚡ SpacetimeDB Live Leaderboard", box=box.ROUNDED, border_style="bright_green")
+        table.add_column("Rank", justify="center", width=6)
+        table.add_column("Candidate", width=30)
+        table.add_column("Popularity", justify="right", width=12)
+        table.add_column("Bar", width=20)
+
+        for r in lb["rankings"]:
+            pop = r["popularity"]
+            bar = "█" * int(pop)
+            color = "bold cyan" if r["id"] == "player" else "white"
+            if r["rank"] == 1:
+                color = "bold green"
+            table.add_row(
+                f"#{r['rank']}",
+                f"[{color}]{r['name']}[/{color}]",
+                f"[{color}]{pop:.0f}%[/{color}]",
+                f"[{color}]{bar}[/{color}]",
+            )
+
+        console.print(table)
+    except Exception as e:
+        console.print(f"[dim]  ⚡ SpacetimeDB: {str(e)[:60]}[/dim]")
+
+
 def main():
     """Run the prototype."""
     # Check API key
@@ -202,8 +235,21 @@ def main():
         console.print("Create a .env file with: GOOGLE_API_KEY=your_key_here")
         sys.exit(1)
 
+    # Check SpacetimeDB
+    try:
+        from bridge.spacetime_client import is_spacetimedb_running
+        stdb_ok = is_spacetimedb_running()
+    except Exception:
+        stdb_ok = False
+
     game = GameState()
     show_welcome()
+
+    if stdb_ok:
+        console.print("[bright_green]⚡ SpacetimeDB connected (localhost:3000)[/bright_green]")
+        show_spacetime_leaderboard()
+    else:
+        console.print("[dim]⚡ SpacetimeDB: offline (running without real-time sync)[/dim]")
 
     # Show initial voter dashboard
     show_voter_dashboard(game.voter_sentiments)
@@ -242,7 +288,12 @@ def main():
 
         console.print(f"\n[bold green]📢 You announced: \"{player_action}\"[/bold green]\n")
 
-        # Run the turn with progress indicator
+        # Run the turn with progress callback
+        status_text = ["AI candidates are thinking..."]
+
+        def update_status(msg):
+            status_text[0] = msg
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[bold cyan]{task.description}"),
@@ -250,8 +301,8 @@ def main():
         ) as progress:
             task = progress.add_task("AI candidates are thinking...", total=None)
 
-            # Run full game turn
-            result = run_full_turn(player_action, game)
+            # Run full game turn with callback
+            result = run_full_turn(player_action, game, callback=update_status)
 
             progress.update(task, description="Done!", completed=True)
 
@@ -272,6 +323,14 @@ def main():
         console.print()
         show_election_forecast(result["election_forecast"])
 
+        # 5. SpacetimeDB live leaderboard
+        if stdb_ok:
+            show_spacetime_leaderboard()
+            sync = result.get("spacetime_sync", {})
+            if sync and not isinstance(sync.get("status"), str):
+                synced = sum(1 for v in sync.values() if isinstance(v, dict) and v.get("success"))
+                console.print(f"  [bright_green]⚡ Synced {synced} voter shifts to SpacetimeDB[/bright_green]")
+
         # Separator
         console.print("[dim]─" * 60 + "[/dim]\n")
 
@@ -285,3 +344,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

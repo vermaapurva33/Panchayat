@@ -6,8 +6,7 @@ The core agentic workflow manager. Implements a StateGraph that:
 2. For each AI candidate: uses Gemini + tools to generate an in-character reaction
 3. Updates voter sentiments and election forecast
 
-Rate-limit aware: adds delays between Gemini calls to stay within free-tier limits.
-Uses gemini-2.5-flash-lite (10 RPM, 20 RPD) as the primary model.
+Uses ChatGroq (llama-3.3-70b-versatile) as the primary model.
 """
 
 import os
@@ -16,7 +15,7 @@ import time
 from typing import TypedDict
 from dotenv import load_dotenv
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 try:
     from langchain.agents import create_react_agent
@@ -48,9 +47,9 @@ from data.voter_profiles import VOTER_PROFILES, calculate_reaction
 load_dotenv(os.path.join(PROJECT_ROOT, ".env"))
 
 # ─── Rate Limit Config ──────────────────────────────────────────────────────
-# gemini-2.5-flash-lite: 10 RPM = 1 request per 6 seconds
-# We add a 7-second delay between calls to be safe
-RATE_LIMIT_DELAY = 7  # seconds between Gemini API calls
+# gemma-4-31b-it: 15 RPM = 1 request per 4 seconds, 1.5K RPD
+# 4-second delay matches the actual rate limit precisely
+RATE_LIMIT_DELAY = 0  # Groq API is fast enough to not need this artificial delay
 
 
 # ─── Game State ──────────────────────────────────────────────────────────────
@@ -80,64 +79,52 @@ class GameState:
 
 def _get_model_name() -> str:
     """Get the best available model from env, with fallback chain."""
-    return os.getenv("GEMINI_FLASH_MODEL", "gemini-2.5-flash")
+    return os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 
-def create_candidate_agent(candidate_id: str):
+def create_candidate_llm(candidate_id: str):
     """
-    Create a LangGraph ReAct agent for a specific candidate.
-    Uses gemini-3.1-flash-lite for speed + rate limit friendliness.
+    Create a direct LLM instance for a candidate (no agent/tools).
+    Faster than ReAct agent — no tool-call round-trips.
     """
     model_name = _get_model_name()
     system_prompt = get_candidate_system_prompt(candidate_id)
 
-    llm = ChatGoogleGenerativeAI(
+    llm = ChatGroq(
         model=model_name,
-        temperature=0.8,
-        google_api_key=os.getenv("GOOGLE_API_KEY"),
-        max_retries=3,
-        request_timeout=30,
+        temperature=0.85,
+        api_key=os.getenv("GROQ_API_KEY"),
+        max_retries=2,
+        request_timeout=20,
+        max_tokens=150,
     )
 
-    tools = get_all_tools()
-
-    agent = create_react_agent(
-        llm,
-        tools,
-        prompt=system_prompt,
-    )
-
-    return agent
+    return llm, system_prompt
 
 
 def run_candidate_reaction(candidate_id: str, player_action: str, callback=None) -> str:
     """
-    Run a single candidate's reaction using ReAct agent.
-    Includes rate-limit delay and error handling with retry.
+    Run a single candidate's reaction using direct LLM call (no agent).
+    Much faster than ReAct agent — single API call, no tool round-trips.
     """
     max_retries = 2
 
     for attempt in range(max_retries):
         try:
-            agent = create_candidate_agent(candidate_id)
+            llm, system_prompt = create_candidate_llm(candidate_id)
             user_prompt = build_reaction_prompt(candidate_id, player_action)
 
-            result = agent.invoke({
-                "messages": [HumanMessage(content=user_prompt)]
-            })
+            result = llm.invoke([
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_prompt),
+            ])
 
-            # Extract final response
-            messages = result.get("messages", [])
-            for msg in reversed(messages):
-                if hasattr(msg, "content") and msg.content and not getattr(msg, "tool_calls", None):
-                    return msg.content
-
-            return "[No response generated]"
+            text = _extract_text(result.content)
+            return text if text else "[No response generated]"
 
         except Exception as e:
             error_msg = str(e)
             if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                # Rate limited — wait and retry
                 wait_time = RATE_LIMIT_DELAY * (attempt + 2)
                 if callback:
                     callback(f"Rate limited, waiting {wait_time}s...")
@@ -204,6 +191,19 @@ def run_full_turn(player_action: str, game_state: GameState, callback=None) -> d
             "narrative": reaction_result["narrative"],
         }
 
+    # Phase 2.5: Sync sentiment shifts to SpacetimeDB (optional)
+    spacetime_sync = {}
+    try:
+        from bridge.spacetime_client import sync_sentiment_shifts, is_spacetimedb_running
+        if is_spacetimedb_running():
+            if callback:
+                callback("Syncing to SpacetimeDB...")
+            spacetime_sync = sync_sentiment_shifts(sentiment_changes)
+        else:
+            spacetime_sync = {"status": "skipped", "reason": "SpacetimeDB not running"}
+    except Exception as e:
+        spacetime_sync = {"status": "error", "reason": str(e)[:100]}
+
     # Phase 3: Recalculate election forecast
     candidate_ideologies = get_candidate_ideologies()
     mock_sentiments = {}
@@ -231,11 +231,34 @@ def run_full_turn(player_action: str, game_state: GameState, callback=None) -> d
         "candidate_reactions": candidate_reactions,
         "sentiment_changes": sentiment_changes,
         "election_forecast": election,
+        "spacetime_sync": spacetime_sync,
         "game_state": game_state.to_dict(),
     }
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
+
+def _extract_text(content) -> str:
+    """
+    Extract plain text from LLM response content.
+    Extract plain text from LLM response content.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        # Extract all 'text' type blocks, skip 'thinking'
+        text_parts = []
+        for item in content:
+            if isinstance(item, dict):
+                if item.get("type") == "text":
+                    text_parts.append(item.get("text", ""))
+                elif "text" in item and item.get("type") != "thinking":
+                    text_parts.append(item["text"])
+            elif isinstance(item, str):
+                text_parts.append(item)
+        return " ".join(text_parts) if text_parts else str(content)
+    return str(content)
+
 
 def _detect_category(action: str) -> str:
     """Simple keyword-based category detection."""

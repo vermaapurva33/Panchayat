@@ -51,19 +51,26 @@ def get_all_candidate_ids() -> list:
 
 def build_reaction_prompt(candidate_id: str, player_action: str) -> str:
     """
-    Build the user-facing prompt that asks a candidate to react to the player's action.
-    The system prompt (persona) is set separately via system_instruction.
+    Build a concise reaction prompt. No tool usage — direct in-character response.
+    Designed for fast TTS-friendly output.
     """
+    info = get_candidate_info(candidate_id)
+    name = info.get("name", candidate_id)
+    archetype = info.get("archetype", "politician")
+    party = info.get("party_name", "")
+
     return (
-        f"The player (your political opponent) has just announced the following policy:\n\n"
-        f"PLAYER'S POLICY: \"{player_action}\"\n\n"
-        f"You must react to this policy IN CHARACTER. You have access to tools that let you:\n"
-        f"1. Search real-world Indian political scenarios for context\n"
-        f"2. Check voter sentiment to understand how this affects your base\n"
-        f"3. Analyze how this policy aligns or conflicts with your ideology\n\n"
-        f"Use at least ONE tool before responding to ground your reaction in real data.\n\n"
-        f"Then give your public reaction in 2-3 sentences, staying completely in character. "
-        f"Include your emotional tone and reference specific data from your research."
+        f"You are {name}, {archetype} of {party}.\n"
+        f"Your opponent just announced: \"{player_action}\"\n\n"
+        f"React in EXACTLY 2 sentences:\n"
+        f"- Sentence 1: Your emotional reaction (agree, disagree, mock, or challenge)\n"
+        f"- Sentence 2: Your counter-proposal or attack on their policy\n\n"
+        f"RULES:\n"
+        f"- Stay in character. Use your ideology and political style.\n"
+        f"- Be aggressive and political. This is a heated election debate.\n"
+        f"- No stage directions, no asterisks, no 'As a...' openings.\n"
+        f"- Reference real Indian political concepts when relevant.\n"
+        f"- Max 50 words total. Be punchy."
     )
 
 

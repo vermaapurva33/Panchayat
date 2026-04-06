@@ -56,13 +56,19 @@ out/
 server/.spacetimedb/
 *.stdb
 
-
+# SpacetimeDB / C# Build Artifacts
+[Bb]in/
+[Oo]bj/
+server/spacetimedb/bin/
+server/spacetimedb/obj/
 
 *.json
 !server/spacetime.json
 !data/*.json
 !client/package.json
+!client/package-lock.json
 !client/tsconfig.json
+
 
 notary-keypair.json
 *-keypair.json

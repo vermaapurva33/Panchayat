@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode
+.venv
+__pycache__
+*.pyc
+*.pyo
+client/node_modules
+client/dist
+.DS_Store

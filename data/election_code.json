@@ -1,0 +1,116 @@
+{
+  "model_code_of_conduct": {
+    "version": "1.0",
+    "authority": "Panchayat Election Commission (AI Shield)",
+    "description": "Structured intent model defining allowed and blocked political actions for AI candidates in the Panchayat election simulation."
+  },
+
+  "allowed_actions": [
+    {
+      "type": "policy_critique",
+      "description": "Fact-based criticism of an opponent's policy proposal",
+      "example": "Your MSP increase of 50% will require Rs 2.5 lakh crore — where is the fiscal plan?",
+      "severity": "none",
+      "voter_impact": { "min": -5, "max": 5 }
+    },
+    {
+      "type": "alliance_proposal",
+      "description": "Propose collaboration with another candidate on a shared policy goal",
+      "example": "Let us unite on the clean water initiative — our constituencies both need it",
+      "severity": "none",
+      "voter_impact": { "min": 2, "max": 8 }
+    },
+    {
+      "type": "public_challenge",
+      "description": "Challenge an opponent to defend their position publicly",
+      "example": "I challenge you to explain how you will fund free healthcare without raising taxes",
+      "severity": "none",
+      "voter_impact": { "min": -3, "max": 5 }
+    },
+    {
+      "type": "scandal_expose",
+      "description": "Reveal documented inconsistencies or contradictions in an opponent's record",
+      "example": "In Round 1 you promised no new taxes, but your Round 3 manifesto proposes a GST hike",
+      "severity": "none",
+      "voter_impact": { "min": -8, "max": -2 }
+    },
+    {
+      "type": "voter_appeal",
+      "description": "Direct emotional or rational appeal to a specific voter demographic",
+      "example": "Farmers of this Panchayat, I stood with you during the drought — I ask for your trust again",
+      "severity": "none",
+      "voter_impact": { "min": 3, "max": 10 }
+    },
+    {
+      "type": "deepfake_voice",
+      "description": "Deploy a fabricated voice clip using an opponent's cloned voice to damage their reputation",
+      "example": "A fake audio clip surfaces of the opponent admitting to corruption",
+      "severity": "high",
+      "voter_impact": { "min": -15, "max": -8 },
+      "backfire_impact": { "min": -15, "max": -10 },
+      "note": "High risk — Shield watermark analysis may detect the synthetic audio"
+    },
+    {
+      "type": "truth_notarize",
+      "description": "Notarize a manifesto statement on the Truth Ledger for authenticity verification",
+      "example": "I register my MSP promise on the blockchain so no one can fabricate my words",
+      "severity": "none",
+      "voter_impact": { "min": 3, "max": 8 },
+      "note": "Defensive action — provides passive protection against deepfake attacks"
+    },
+    {
+      "type": "deepfake_debunk",
+      "description": "Investigate and debunk a suspected deepfake clip using voice analysis",
+      "example": "Audio forensics reveal the viral clip was AI-generated, exposing the deployer",
+      "severity": "none",
+      "voter_impact": { "min": 5, "max": 12 },
+      "note": "Counter-attack — exposes the deepfake deployer with heavy penalties"
+    }
+  ],
+
+  "blocked_actions": [
+    {
+      "type": "communal_incitement",
+      "description": "Statements targeting voters or opponents based on religion, caste, or ethnicity",
+      "example": "Only people of our community deserve to lead this Panchayat",
+      "severity": "critical",
+      "block_reason": "Violates Section 125 of RPA: promoting enmity between classes"
+    },
+    {
+      "type": "personal_attack",
+      "description": "Ad hominem attacks on an opponent's character, family, or personal life",
+      "example": "Your entire family is corrupt and everyone knows it",
+      "severity": "critical",
+      "block_reason": "Violates Model Code of Conduct: personal criticism unrelated to public policy"
+    },
+    {
+      "type": "fabricated_claim",
+      "description": "Making accusations without any factual basis or evidence",
+      "example": "My opponent secretly plans to sell the village common land to corporations",
+      "severity": "high",
+      "block_reason": "Violates Section 171G of IPC: false statement in connection with election"
+    },
+    {
+      "type": "voter_intimidation",
+      "description": "Threatening voter groups with consequences for not supporting a candidate",
+      "example": "If you don't vote for me, government schemes will stop in your area",
+      "severity": "critical",
+      "block_reason": "Violates Section 171C of IPC: undue influence at elections"
+    },
+    {
+      "type": "bribery_promise",
+      "description": "Promising direct cash or gifts in exchange for votes",
+      "example": "Every family that votes for me will receive Rs 5000 in cash",
+      "severity": "critical",
+      "block_reason": "Violates Section 171B of IPC: bribery in elections"
+    }
+  ],
+
+  "enforcement_rules": {
+    "policy": "fail_closed",
+    "description": "Any action that cannot be verified as allowed is blocked by default",
+    "audit_required": true,
+    "max_actions_per_candidate_per_round": 1,
+    "cooldown_rounds_after_block": 0
+  }
+}

@@ -12,6 +12,6 @@ build_property.PlatformNeutralAssembly =
 build_property.EnforceExtendedAnalyzerRules = 
 build_property._SupportedPlatformList = wasi
 build_property.RootNamespace = StdbModule
-build_property.ProjectDir = /home/avatar/Desktop/hackbyte/Panchayat/server/spacetimedb/
+build_property.ProjectDir = /home/apurva/Panchayat/server/spacetimedb/
 build_property.EnableComHosting = 
 build_property.EnableGeneratedComInterfaceComImportInterop = false
